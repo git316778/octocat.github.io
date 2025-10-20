@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>竖屏素材搜集工具</title>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<!-- 主题色变量 -->
+<style>
+:root{
+  --theme:#8B0000;
+  --radius:8px;
+  --shadow:0 2px 8px rgba(0,0,0,.12);
+  --font14:14px;
+  --font16:16px;
+}
+* {box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans",sans-serif;}
+body{background:#fafafa;display:flex;flex-direction:column;min-height:100vh;}
+a{color:var(--theme);text-decoration:none;}
+header,footer{background:var(--theme);color:#fff;display:flex;align-items:center;padding:0 24px;height:56px;font-weight:bold;font-size:var(--font16);}
+footer{justify-content:center;font-weight:normal;font-size:var(--font14);}
+main{flex:1;display:flex;justify-content:center;align-items:flex-start;padding:32px 16px;}
+.card{width:100%;max-width:640px;background:#fff;border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;}
+textarea{width:100%;min-height:100px;resize:vertical;font-size:var(--font14);padding:8px;border:1px solid #ddd;border-radius:4px;}
+.char-count{font-size:12px;color:#666;text-align:right;margin-top:4px;}
+.collapse-btn{background:none;border:none;color:var(--theme);cursor:pointer;font-size:var(--font14);margin-bottom:8px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+label{font-size:var(--font14);display:flex;align-items:center;gap:6px;}
+input[type=number]{width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;}
+.switch{position:relative;display:inline-block;width:36px;height:20px;}
+.switch input{opacity:0;width:0;height:0;}
+.slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:#ccc;transition:.3s;border-radius:20px;}
+.slider:before{position:absolute;content:"";height:14px;width:14px;left:3px;bottom:3px;background:#fff;transition:.3s;border-radius:50%;}
+input:checked+.slider{background:var(--theme);}
+input:checked+.slider:before{transform:translateX(16px);}
+.chk-group{display:flex;flex-wrap:wrap;gap:10px;font-size:var(--font14);}
+button{cursor:pointer;border:none;font-size:var(--font14);}
+.btn-primary{background:var(--theme);color:#fff;border-radius:4px;width:160px;height:40px;}
+.btn-primary:disabled{background:#999;}
+progress{width:100%;}
+.status{display:flex;align-items:center;gap:8px;font-size:var(--font14);margin-top:8px;}
+table{width:100%;font-size:var(--font14);border-collapse:collapse;margin-top:12px;}
+th,td{padding:6px 4px;text-align:left;border-bottom:1px solid #eee;}
+th{background:#fafafa;}
+.tip-red{color:#e54545;font-size:var(--font14);margin-top:4px;}
+.banner-err{background:#fee;color:#e54545;padding:8px 12px;border-radius:4px;margin-bottom:12px;}
+.hidden{display:none;}
+</style>
+</head>
+<body>
+
+<header>
+  <span style="margin-right:auto;">📱</span>
+  <span>竖屏素材搜集工具</span>
+</header>
+
+<main>
+  <div class="card">
+    <!-- 关键词 -->
+    <div>
+      <textarea id="keywordInput" maxlength="200" placeholder="请输入关键词，多个请换行"></textarea>
+      <div class="char-count"><span id="curLen">0</span>/200</div>
+    </div>
+
+    <!-- 高级设置 -->
+    <button class="collapse-btn" id="collapseBtn">高级设置 ▼</button>
+    <div id="advPanel" class="hidden">
+      <div class="grid2">
+        <label>图片条数<input type="number" id="imgCount" min="0" max="200" value="20"/></label>
+        <label>视频条数<input type="number" id="videoCount" min="0" max="200" value="10"/></label>
+      </div>
+      <div class="grid2" style="margin-top:12px;">
+        <label><span>仅CC0/可商用</span>
+          <label class="switch"><input type="checkbox" id="onlyCC0" checked/><span class="slider"></span></label>
+        </label>
+      </div>
+      <div style="margin-top:12px;">
+        <div style="margin-bottom:4px;font-size:var(--font14);">来源平台（多选）</div>
+        <div class="chk-group" id="sourceGroup"></div>
+      </div>
+    </div>
+
+    <!-- 按钮 & 进度 -->
+    <div style="margin-top:16px;text-align:center;">
+      <button class="btn-primary" id="startBtn">开始搜集</button>
+      <div id="statusRow" class="status hidden">
+        <progress id="progressBar" value="0" max="100"></progress>
+        <span id="progressText">已完成 0/0</span>
+      </div>
+      <div id="errorTip" class="tip-red"></div>
+    </div>
+
+    <!-- 结果区 -->
+    <div id="resultArea" class="hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin:12px 0;font-size:var(--font14);">
+        <span id="summary">共 0 条，全部可商用</span>
+        <button class="btn-primary" id="exportBtn">导出 Excel</button>
+      </div>
+      <table id="resultTable">
+        <thead><tr>
+          <th>关键词</th><th>类型</th><th>分辨率</th><th>时长</th><th>来源</th><th>操作</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Powered by <a href="https://space.bilibili.com/666308" target="_blank" rel="noopener">@TuTu生活志</a>
+</footer>
+
+<!-- SheetJS CDN -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- 业务脚本 -->
+<script src="main.js"></script>
+</body>
+</html>
