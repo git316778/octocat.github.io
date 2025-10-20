@@ -89,7 +89,7 @@ startBtn.onclick = async ()=>{
 
   try{
     // ① 调用后端 /kimi-api
-    const res = await fetch('https://your-kimi-api.com/v1/vertical',{
+    const res = await fetch('http://localhost:8080/v1/vertical',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify(params)
