@@ -1,63 +1,125 @@
-require('dotenv').config();
-const express = require('express');
-const axios = require('axios');
-const app = express();
-app.use(express.json());
+// 平台列表
+const PLATFORMS = ['抖音','快手','小红书','知乎','网易号','搜狐号','今日头条','B站'];
+// DOM 缓存
+const $ = id => document.getElementById(id);
+const keywordInput = $('keywordInput'),
+      curLen = $('curLen'),
+      collapseBtn = $('collapseBtn'),
+      advPanel = $('advPanel'),
+      imgCount = $('imgCount'),
+      videoCount = $('videoCount'),
+      onlyCC0 = $('onlyCC0'),
+      sourceGroup = $('sourceGroup'),
+      startBtn = $('startBtn'),
+      statusRow = $('statusRow'),
+      progressBar = $('progressBar'),
+      progressText = $('progressText'),
+      errorTip = $('errorTip'),
+      resultArea = $('resultArea'),
+      summary = $('summary'),
+      resultTable = $('resultTable').querySelector('tbody'),
+      exportBtn = $('exportBtn');
 
-const KIMI_KEY = process.env.KIMI_KEY;
-if (!KIMI_KEY) throw new Error('请配置环境变量 KIMI_KEY');
-
-// 允许前端跨域
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  next();
+// 字符计数
+keywordInput.addEventListener('input',()=>{
+  curLen.textContent = keywordInput.value.length;
+  if(keywordInput.value.length>200) keywordInput.value = keywordInput.value.slice(0,200);
 });
 
-// 唯一接口
-app.post('/kimi-proxy', async (req, res) => {
-  const { keywords, imgCount, videoCount, onlyCC0, sources } = req.body;
+// 高级折叠
+collapseBtn.onclick = ()=>{
+  const expanded = advPanel.classList.toggle('hidden');
+  collapseBtn.textContent = expanded ? '高级设置 ▼' : '高级设置 ▲';
+};
 
-  // 拼装提示词
-  const prompt = `
-请扮演“竖屏素材爬虫”，严格按下面规则返回 JSON 数组，不要多余解释。
-规则：
-1. 每条字段：keyword, type(video/image), url(直链), preview(缩略图), resolution, duration(秒), source, license。
-2. 保证所有 url 可公开访问、且标注“可商用”。
-3. 返回数量：${imgCount} 张图 + ${videoCount} 条视频，共 ${imgCount + videoCount} 条。
-4. 关键词：${keywords.join('、')}。
-5. 平台：${sources.join('、')}。
-6. ${onlyCC0 ? '仅返回 CC0 授权' : '优先返回 CC0，如无则注明出处'}。
+// 渲染平台多选
+sourceGroup.innerHTML = PLATFORMS.map(p=>`
+  <label><input type="checkbox" value="${p}" checked/>${p}</label>`).join('');
 
-返回格式示例：
-[
-  {"keyword":"浙大","type":"image","url":"https://xxx.jpg","preview":"https://xxx_s.jpg","resolution":"1080x1920","duration":"-","source":"抖音","license":"CC0"},
-  ...
-]
-`;
+// 工具：拷贝文本
+function copyText(txt){
+  const i = document.createElement('input');
+  i.value = txt;
+  document.body.appendChild(i);
+  i.select();
+  document.execCommand('copy');
+  document.body.removeChild(i);
+  alert('直链已复制');
+}
 
-  try {
-    const { data } = await axios.post(
-      'https://api.moonshot.cn/v1/chat/completions',
-      {
-        model: 'moonshot-v1-8k',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3
-      },
-      { headers: { Authorization: `Bearer ${KIMI_KEY}` } }
-    );
+// 工具：前端导出 Excel（SheetJS）
+function exportExcel(){
+  const wb = XLSX.utils.table_to_book($('resultTable'),{sheet:'素材'});
+  XLSX.writeFile(wb,'浙江大学-竖屏素材.xlsx');
+}
 
-    // 提取 markdown 代码块里的 JSON
-    const raw = data.choices[0].message.content;
-    const jsonStr = raw.match(/\[([\s\S]*)\]/)[0];
-    const list = JSON.parse(jsonStr);
-
-    console.log('[kimi-proxy] 返回条数:', list.length);
-    res.json(list);
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: 'Kimi 调用失败：' + e.message });
+// 主流程
+startBtn.onclick = async ()=>{
+  errorTip.textContent = '';
+  const kws = keywordInput.value.split(/\n/).map(s=>s.trim()).filter(Boolean);
+  if(!kws.length){
+    errorTip.textContent = '请至少输入一个关键词';
+    return;
   }
-});
+  // 置灰
+  startBtn.disabled = true;
+  startBtn.textContent = '搜集中…';
+  statusRow.classList.remove('hidden');
+  resultArea.classList.add('hidden');
+  resultTable.innerHTML = '';
 
-app.listen(3000, () => console.log('Kimi 本地代理已启动 http://localhost:3000'));
+  // 收集参数
+  const params = {
+    keywords: kws,
+    imgCount: Number(imgCount.value),
+    videoCount: Number(videoCount.value),
+    onlyCC0: onlyCC0.checked,
+    sources: [...sourceGroup.querySelectorAll('input:checked')].map(i=>i.value)
+  };
+  const totalExpect = params.imgCount + params.videoCount;
+  let finished = 0;
+
+  // 模拟进度（真实场景用 websocket 或轮询）
+  const updateProgress = (add=1)=>{
+    finished += add;
+    const pct = Math.round(finished/totalExpect*100);
+    progressBar.value = pct;
+    progressText.textContent = `已完成 ${finished}/${totalExpect}`;
+  };
+
+  try{
+    // ① 调用后端 /kimi-api
+    const res = await fetch('http://localhost:3000/kimi-proxy',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(params)
+    });
+    if(!res.ok) throw new Error('服务异常，请稍后重试');
+    const list = await res.json();   // [{keyword,type,url,preview,resolution,duration,source,license},…]
+    if(!list.length) throw new Error('暂无竖屏素材，请更换关键词');
+
+    // ② 填表
+    list.forEach(it=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${it.keyword}</td>
+        <td>${it.type==='video'?'Video':'Image'}</td>
+        <td>${it.resolution||'-'}</td>
+        <td>${it.duration||'-'}</td>
+        <td>${it.source}</td>
+        <td><button onclick="copyText('${it.url}')">复制直链</button></td>`;
+      resultTable.appendChild(tr);
+      updateProgress();
+    });
+    summary.textContent = `共 ${list.length} 条，全部可商用`;
+    resultArea.classList.remove('hidden');
+  }catch(err){
+    errorTip.textContent = err.message || '服务异常，请稍后重试';
+  }finally{
+    startBtn.disabled = false;
+    startBtn.textContent = '开始搜集';
+  }
+};
+
+// 导出按钮
+exportBtn.onclick = exportExcel;
